@@ -1,71 +1,86 @@
 # Reconhecimento Facial com TensorFlow.js
 
-Este projeto é uma aplicação frontend que demonstra um sistema simples de reconhecimento facial utilizando [TensorFlow.js](https://www.tensorflow.org/js), ideal para estudos e demonstrações de vivacidade facial em tempo real.
+Aplicação de demonstração de reconhecimento facial em tempo real no navegador usando **React** + **face-api.js/TensorFlow.js**, com um microserviço em **Express** para listar pessoas cadastradas.
 
-## 📌 Visão Geral
+## Visão geral
 
-- **Frontend**: Servido em `http://localhost:3000` com `npm run start`
-- **Backend (Microserviço)**: Servido em `http://localhost:5000` com `npm run backend`
-- **Reconhecimento Facial**: Implementado com `TensorFlow.js` diretamente no navegador
+- **Frontend:** `http://localhost:3000`
+- **Backend:** `http://localhost:5000`
+- **Reconhecimento facial:** executado no cliente (browser) com modelos em `public/models`
 
-## 📂 Estrutura do Projeto
+## Estrutura do projeto
 
-├── public/ # Arquivos públicos e modelo HTML base
-├── src/ # Código fonte React e lógica de reconhecimento
-│ ├── components/ # Componentes reutilizáveis da interface
-│ ├── services/ # Comunicação com backend
-│ ├── App.js # Componente principal da aplicação
-│ └── index.js # Entrada principal do React
-├── server.js # Backend Express para auxiliar a aplicação
-├── package.json # Scripts e dependências
-└── README.md # Este arquivo
+```text
+.
+├── public/
+│   ├── models/               # Modelos de visão computacional
+│   └── pessoas/              # Imagens de referência para reconhecimento
+├── src/
+│   ├── components/
+│   │   └── FaceRecognition.js
+│   ├── App.js
+│   └── index.js
+├── server.js                 # API simples para listar pessoas
+├── package.json
+└── README.md
+```
 
+## Pré-requisitos
 
-## 🚀 Como Executar
+- Node.js 16+ (recomendado)
+- npm
+- Navegador com permissão de webcam
 
-### 1. Pré-requisitos
-
-- Node.js instalado (versão recomendada: 16 ou superior)
-- npm (gerenciador de pacotes do Node.js)
-
-### 2. Instalação
-
-Clone o projeto e instale as dependências:
+## Instalação
 
 ```bash
 npm install
-3. Executar o Backend
+```
+
+## Como executar
+
+### 1) Subir backend
+
 ```bash
 npm run backend
-Isso iniciará o microserviço na porta http://localhost:5000
+```
 
-4. Executar o Frontend
+Backend disponível em `http://localhost:5000`.
+
+### 2) Subir frontend
+
 Em outro terminal:
 
 ```bash
-npm run start
-Isso abrirá a aplicação em http://localhost:3000
+npm start
+```
 
-🧠 Tecnologias Utilizadas
-React.js
+Frontend disponível em `http://localhost:3000`.
 
-TensorFlow.js
+## Scripts disponíveis
 
-Express.js
+- `npm start` — inicia app React
+- `npm run backend` — inicia API Express
+- `npm test` — executa testes
+- `npm run build` — gera build de produção
 
-HTML5, CSS3, JavaScript
+## Funcionalidades
 
-💡 Funcionalidades
-Captura de imagem facial via webcam
+- Captura de vídeo via webcam
+- Detecção e landmarks faciais
+- Matching facial com base em imagens locais (`public/pessoas`)
+- Exibição do nome identificado (ou "Desconhecido")
 
-Processamento facial com modelo do TensorFlow
+## Observações importantes
 
-Comunicação com backend para manipulação dos dados (caso necessário)
+- O backend precisa estar em execução para carregar os rótulos de pessoas.
+- As imagens em `public/pessoas` devem conter rostos detectáveis.
+- O primeiro carregamento pode ser mais lento devido ao download dos modelos.
 
-📄 Licença
-Este projeto está licenciado sob os termos da MIT License.
+## Licença
 
-👨‍💻 Desenvolvido por
+MIT
+
+## Autor
+
 Lucas H. Tasca de Araujo
-
-

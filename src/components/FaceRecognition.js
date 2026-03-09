@@ -2,100 +2,160 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as faceapi from 'face-api.js';
 
 const FaceRecognition = () => {
-  const videoRef = useRef();
-  const canvasRef = useRef();
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const intervalRef = useRef(null);
   const [faceMatcher, setFaceMatcher] = useState(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadModels = async () => {
-      const MODEL_URL = process.env.PUBLIC_URL + '/models';
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL)
-      ]);
-      const labeledDescriptors = await loadLabeledImages();
-      setFaceMatcher(new faceapi.FaceMatcher(labeledDescriptors, 0.6));
-      startVideo();
+      try {
+        const modelUrl = `${process.env.PUBLIC_URL}/models`;
+
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+          faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
+          faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
+          faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl)
+        ]);
+
+        const labeledDescriptors = await loadLabeledImages();
+
+        if (isMounted && labeledDescriptors.length > 0) {
+          setFaceMatcher(new faceapi.FaceMatcher(labeledDescriptors, 0.6));
+        }
+
+        await startVideo();
+      } catch (error) {
+        console.error('Erro ao inicializar reconhecimento facial:', error);
+      }
     };
 
     loadModels();
+
+    return () => {
+      isMounted = false;
+
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
   }, []);
 
-  const startVideo = () => {
-    navigator.mediaDevices.getUserMedia({ video: {} })
-      .then(stream => videoRef.current.srcObject = stream)
-      .catch(err => console.error('Erro ao acessar webcam', err));
+  const startVideo = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Erro ao acessar webcam:', error);
+    }
   };
 
   const loadLabeledImages = async () => {
-    const response = await fetch('http://localhost:5000/api/pessoas');
-    const labels = await response.json();
+    try {
+      const response = await fetch('http://localhost:5000/api/pessoas');
 
-    return Promise.all(labels.map(async (label) => {
-      const imgUrl = `${process.env.PUBLIC_URL}/pessoas/${label}.jpg`;
-      const img = await faceapi.fetchImage(imgUrl);
-      const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-      if (!detection) {
-        console.warn(`Não foi possível detectar o rosto de ${label}`);
-        return null;
+      if (!response.ok) {
+        throw new Error(`Falha ao buscar pessoas: ${response.status}`);
       }
-      return new faceapi.LabeledFaceDescriptors(label, [detection.descriptor]);
-    })).then(res => res.filter(Boolean));
+
+      const labels = await response.json();
+
+      const descriptors = await Promise.all(labels.map(async (label) => {
+        const imgUrl = `${process.env.PUBLIC_URL}/pessoas/${label}.jpg`;
+        const img = await faceapi.fetchImage(imgUrl);
+        const detection = await faceapi
+          .detectSingleFace(img)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!detection) {
+          console.warn(`Não foi possível detectar o rosto de ${label}`);
+          return null;
+        }
+
+        return new faceapi.LabeledFaceDescriptors(label, [detection.descriptor]);
+      }));
+
+      return descriptors.filter(Boolean);
+    } catch (error) {
+      console.error('Erro ao carregar imagens rotuladas:', error);
+      return [];
+    }
   };
 
   const handleVideoOnPlay = () => {
-    setInterval(async () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+
+    if (!canvas || !video) {
+      return;
+    }
+
+    const displaySize = { width: video.width, height: video.height };
+    faceapi.matchDimensions(canvas, displaySize);
+
+    intervalRef.current = setInterval(async () => {
       const detections = await faceapi
-        .detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptors();
 
-      canvasRef.current.innerHTML = faceapi.createCanvasFromMedia(videoRef.current);
-      const displaySize = {
-        width: videoRef.current.width,
-        height: videoRef.current.height,
-      };
-      faceapi.matchDimensions(canvasRef.current, displaySize);
-      const resized = faceapi.resizeResults(detections, displaySize);
+      const resizedDetections = faceapi.resizeResults(detections, displaySize);
+      const context = canvas.getContext('2d');
 
-      canvasRef.current.getContext('2d').clearRect(0, 0, displaySize.width, displaySize.height);
+      context.clearRect(0, 0, displaySize.width, displaySize.height);
 
-      resized.forEach(detection => {
+      resizedDetections.forEach((detection) => {
         const box = detection.detection.box;
-        const drawBox = new faceapi.draw.DrawBox(box, { label: 'Desconhecido' });
+        let label = 'Desconhecido';
 
         if (faceMatcher) {
           const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
-          drawBox.options.label = bestMatch.toString();
+          label = bestMatch.toString();
         }
 
-        drawBox.draw(canvasRef.current);
-        faceapi.draw.drawFaceLandmarks(canvasRef.current, [detection]);
+        const drawBox = new faceapi.draw.DrawBox(box, { label });
+        drawBox.draw(canvas);
+        faceapi.draw.drawFaceLandmarks(canvas, [detection]);
       });
     }, 100);
   };
 
   return (
-    <div style={{ position: 'center', width: 720, height: 560 }}>
-			<h1>TESTE RECONHECIMENTO FACIAL SIGPAS</h1>
-			<video
-				ref={videoRef}
-				autoPlay
-				muted
-				width="720"
-				height="560"
-				onPlay={handleVideoOnPlay}
-				style={{ position: 'absolute' }}
-			/>
-			<canvas
-				ref={canvasRef}
-				width="720"
-				height="560"
-				style={{ position: 'absolute' }}
-			/>
-		</div>
+    <div style={{ position: 'relative', width: 720, height: 560, margin: '0 auto' }}>
+      <h1>TESTE RECONHECIMENTO FACIAL SIGPAS</h1>
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        width="720"
+        height="560"
+        onPlay={handleVideoOnPlay}
+        style={{ position: 'absolute' }}
+      />
+      <canvas
+        ref={canvasRef}
+        width="720"
+        height="560"
+        style={{ position: 'absolute' }}
+      />
+    </div>
   );
 };
 
